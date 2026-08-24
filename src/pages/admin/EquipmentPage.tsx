@@ -78,7 +78,7 @@ export function EquipmentPage() {
       setAiResult(result)
       toast.success('IA analisou o aparelho com sucesso!')
     } catch (err) {
-      toast.error('Erro ao analisar a imagem. Verifique sua API key do Gemini.')
+      toast.error('A IA está temporariamente indisponível. Tente novamente em alguns instantes.')
       console.error(err)
     } finally {
       setAnalyzing(false)

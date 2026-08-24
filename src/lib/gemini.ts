@@ -24,9 +24,36 @@ function getGenAI() {
 const MODEL_PRIMARY = 'gemini-3.6-flash'
 const MODEL_FALLBACK = 'gemini-3.6-flash-lite'
 
-function isQuotaError(err: any): boolean {
-  const msg = String(err?.message ?? err ?? '').toLowerCase()
-  return msg.includes('429') || msg.includes('quota') || msg.includes('rate limit')
+function isTransientGeminiError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : err
+  const msg = String(message ?? '').toLowerCase()
+  return (
+    msg.includes('429') ||
+    msg.includes('500') ||
+    msg.includes('502') ||
+    msg.includes('503') ||
+    msg.includes('504') ||
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('high demand') ||
+    msg.includes('temporarily unavailable')
+  )
+}
+
+const wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
+
+async function retryTransientGeminiRequest<T>(request: () => Promise<T>): Promise<T> {
+  const retryDelays = [750, 1_500]
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await request()
+    } catch (err) {
+      if (!isTransientGeminiError(err) || attempt === retryDelays.length) throw err
+
+      await wait(retryDelays[attempt])
+    }
+  }
 }
 
 // ─── Análise de imagem de aparelho ──────────────────────────────────────────
@@ -75,11 +102,15 @@ Inclua de 3 a 5 exercícios. Responda somente com o JSON, sem nenhum texto antes
 
   let result
   try {
-    result = await ai.getGenerativeModel({ model: MODEL_PRIMARY }).generateContent(parts)
+    result = await retryTransientGeminiRequest(() =>
+      ai.getGenerativeModel({ model: MODEL_PRIMARY }).generateContent(parts)
+    )
   } catch (err) {
-    if (!isQuotaError(err)) throw err
-    console.warn(`[Gemini] Cota de ${MODEL_PRIMARY} esgotada, tentando ${MODEL_FALLBACK}...`)
-    result = await ai.getGenerativeModel({ model: MODEL_FALLBACK }).generateContent(parts)
+    if (!isTransientGeminiError(err)) throw err
+    console.warn(`[Gemini] ${MODEL_PRIMARY} indisponível, tentando ${MODEL_FALLBACK}...`)
+    result = await retryTransientGeminiRequest(() =>
+      ai.getGenerativeModel({ model: MODEL_FALLBACK }).generateContent(parts)
+    )
   }
 
   const text = result.response.text().trim()
@@ -240,14 +271,18 @@ export function createEdGymChatSession(ctx: EdGymContext): EdGymChatSession | nu
 
 async function generateWithFallback(session: EdGymChatSession) {
   try {
-    return await session.model.generateContent({ contents: session.contents })
+    return await retryTransientGeminiRequest(() =>
+      session.model.generateContent({ contents: session.contents })
+    )
   } catch (err) {
-    if (!isQuotaError(err) || session.modelName === MODEL_FALLBACK) throw err
+    if (!isTransientGeminiError(err) || session.modelName === MODEL_FALLBACK) throw err
 
-    console.warn(`[Gemini] Cota de ${session.modelName} esgotada, trocando para ${MODEL_FALLBACK}...`)
+    console.warn(`[Gemini] ${session.modelName} indisponível, trocando para ${MODEL_FALLBACK}...`)
     session.modelName = MODEL_FALLBACK
     session.model = buildModel(session.ctx, MODEL_FALLBACK)
-    return await session.model.generateContent({ contents: session.contents })
+    return retryTransientGeminiRequest(() =>
+      session.model.generateContent({ contents: session.contents })
+    )
   }
 }
 
