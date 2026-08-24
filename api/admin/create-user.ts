@@ -72,5 +72,3 @@ export default async function handler(req: Request) {
     return errorResponse(message, 500)
   }
 }
-
-export const config = { runtime: 'edge' }
