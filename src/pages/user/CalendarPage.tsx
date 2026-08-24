@@ -200,7 +200,7 @@ export function CalendarPage() {
                 selectedSessions.map((session) => (
                   <div key={session.id} className="space-y-3">
                     <div>
-                      <Badge variant="success" className="mb-2">{session.groupName}</Badge>
+                      <Badge className="mb-2">{session.groupName}</Badge>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-secondary/50 rounded-lg p-3 text-center">
