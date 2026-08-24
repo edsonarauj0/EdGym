@@ -1,5 +1,6 @@
 import { adminDb } from '../_lib/firebase-admin'
 import { verifyAdmin, jsonResponse, errorResponse } from '../_lib/auth'
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
 
 /**
  * GET /api/admin/stats
@@ -25,7 +26,7 @@ export default async function handler(req: Request) {
   const oneWeekAgo = new Date()
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
 
-  const recentSessions = sessionsSnap.docs.filter((doc) => {
+  const recentSessions = sessionsSnap.docs.filter((doc: QueryDocumentSnapshot) => {
     const data = doc.data()
     const date = data.createdAt?.toDate?.()
     return date && date >= oneWeekAgo
