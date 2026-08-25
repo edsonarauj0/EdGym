@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { db } from '@/lib/firebase'
 import { getYouTubeSearchUrl } from '@/lib/utils'
-import { Exercise, WorkoutGroup } from '@/types'
+import { Exercise, PersonalWorkout, WorkoutGroup } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea'
 
 interface WorkoutRegistrationDialogProps {
   groups: WorkoutGroup[]
+  personalWorkout?: PersonalWorkout | null
   defaultGroupId?: string
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -26,6 +27,7 @@ interface WorkoutRegistrationDialogProps {
 
 export function WorkoutRegistrationDialog({
   groups,
+  personalWorkout,
   defaultGroupId,
   open,
   onOpenChange,
@@ -43,14 +45,14 @@ export function WorkoutRegistrationDialog({
 
   useEffect(() => {
     if (open) {
-      setSelectedGroupId(defaultGroupId ?? groups[0]?.id ?? '')
+      setSelectedGroupId(personalWorkout?.id ?? defaultGroupId ?? groups[0]?.id ?? '')
       setCompletedIds(new Set())
       setExerciseWeights({})
       setStartedAt(null)
       setLastCheckedAt(null)
       setForm({ bodyWeightKg: '', notes: '' })
     }
-  }, [open, defaultGroupId, groups])
+  }, [open, defaultGroupId, groups, personalWorkout])
 
   useEffect(() => {
     if (!startedAt) return
@@ -58,10 +60,11 @@ export function WorkoutRegistrationDialog({
     return () => window.clearInterval(interval)
   }, [startedAt])
 
-  const selectedGroup = useMemo(
-    () => groups.find((group) => group.id === selectedGroupId) ?? null,
-    [groups, selectedGroupId],
-  )
+  const workoutOptions = useMemo(() => [
+    ...(personalWorkout ? [{ ...personalWorkout, muscleTarget: 'Plano exclusivo para você', colorHex: '#a855f7', isPersonal: true }] : []),
+    ...groups.map((group) => ({ ...group, isPersonal: false })),
+  ], [groups, personalWorkout])
+  const selectedGroup = workoutOptions.find((group) => group.id === selectedGroupId) ?? null
   const exercises = selectedGroup?.exercises ?? []
   const progress = exercises.length ? (completedIds.size / exercises.length) * 100 : 0
   const elapsedSeconds = startedAt ? Math.max(0, Math.floor((currentTime - startedAt) / 1000)) : 0
@@ -106,8 +109,9 @@ export function WorkoutRegistrationDialog({
     try {
       await addDoc(collection(db, 'sessions'), {
         userId: appUser.uid,
-        groupId: selectedGroup.id,
+        groupId: selectedGroup.isPersonal ? '' : selectedGroup.id,
         groupName: selectedGroup.name,
+        ...(selectedGroup.isPersonal ? { personalWorkoutId: selectedGroup.id } : {}),
         date: serverTimestamp(),
         durationMinutes,
         bodyWeightKg: form.bodyWeightKg ? Number.parseFloat(form.bodyWeightKg) : 0,
@@ -118,7 +122,7 @@ export function WorkoutRegistrationDialog({
       })
 
       const usersSnapshot = await getDocs(query(collection(db, 'users'), where('uid', '==', appUser.uid)))
-      if (!usersSnapshot.empty) {
+      if (!selectedGroup.isPersonal && !usersSnapshot.empty) {
         const userDocument = usersSnapshot.docs[0]
         const assignedGroupIds = userDocument.data().assignedGroupIds ?? []
         const selectedIndex = assignedGroupIds.indexOf(selectedGroup.id)
@@ -146,15 +150,15 @@ export function WorkoutRegistrationDialog({
             Registrar treino
           </DialogTitle>
           <DialogDescription id="workout-registration-description">
-            Escolha o grupo realizado e marque os exercícios que você concluiu.
+            Escolha o treino realizado e marque os exercícios que você concluiu.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 px-6 pb-6">
           <div className="space-y-2">
-            <Label>Qual grupo você treinou?</Label>
+            <Label>Qual treino você realizou?</Label>
             <div className="grid gap-2 sm:grid-cols-2">
-              {groups.map((group) => {
+              {workoutOptions.map((group) => {
                 const selected = group.id === selectedGroupId
                 return (
                   <button

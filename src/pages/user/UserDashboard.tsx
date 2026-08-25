@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { collection, getDocs, doc, getDoc, query, where, orderBy, limit } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { WorkoutGroup, WorkoutSession } from '@/types'
+import { PersonalWorkout, WorkoutGroup, WorkoutSession } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +26,7 @@ export function UserDashboard() {
   const navigate = useNavigate()
   const [todayGroup, setTodayGroup] = useState<WorkoutGroup | null>(null)
   const [assignedGroups, setAssignedGroups] = useState<WorkoutGroup[]>([])
+  const [personalWorkout, setPersonalWorkout] = useState<PersonalWorkout | null>(null)
   const [recentSessions, setRecentSessions] = useState<WorkoutSession[]>([])
   const [streak, setStreak] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -40,6 +41,13 @@ export function UserDashboard() {
 
     const loadDashboard = async () => {
       try {
+        const personalWorkoutSnapshot = await getDoc(doc(db, 'personalWorkouts', appUser.uid))
+        if (personalWorkoutSnapshot.exists()) {
+          setPersonalWorkout({ id: personalWorkoutSnapshot.id, ...personalWorkoutSnapshot.data() } as PersonalWorkout)
+        } else {
+          setPersonalWorkout(null)
+        }
+
         // Load today's group based on rotation
         const { assignedGroupIds = [], currentGroupIndex = 0 } = appUser
         const validGroupIds = assignedGroupIds.filter((id: string) => id && id.trim() !== '')
@@ -118,7 +126,8 @@ export function UserDashboard() {
     )
   }
 
-  const totalExercises = todayGroup?.exercises?.length || 0
+  const activeWorkout = personalWorkout ?? todayGroup
+  const totalExercises = activeWorkout?.exercises?.length || 0
   const latestWeight = recentSessions[0]?.bodyWeightKg || 0
 
   return (
@@ -177,28 +186,30 @@ export function UserDashboard() {
               <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
               <CardTitle className="text-lg">Treino de Hoje</CardTitle>
             </div>
-            {todayGroup && (
+            {activeWorkout && (
               <div
                 className="w-4 h-4 rounded-full"
-                style={{ backgroundColor: todayGroup.colorHex || '#22c55e' }}
+                style={{ backgroundColor: personalWorkout ? '#a855f7' : todayGroup?.colorHex || '#22c55e' }}
               />
             )}
           </div>
         </CardHeader>
         <CardContent>
-          {!todayGroup ? (
+          {!activeWorkout ? (
             <div className="text-center py-6">
               <Dumbbell className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
               <p className="text-muted-foreground">
-                Nenhum grupo de treino atribuído ainda.
+                Nenhum treino atribuído ainda.
               </p>
               <p className="text-sm text-muted-foreground">Aguarde seu treinador configurar seu plano.</p>
             </div>
           ) : (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xl font-bold">{todayGroup.name}</h3>
-                {todayGroup.muscleTarget && (
+                <h3 className="text-xl font-bold">{activeWorkout.name}</h3>
+                {personalWorkout ? (
+                  <p className="text-muted-foreground text-sm mt-1">✨ Plano personalizado para você</p>
+                ) : todayGroup?.muscleTarget && (
                   <p className="text-muted-foreground text-sm mt-1">
                     🎯 {todayGroup.muscleTarget}
                   </p>
@@ -213,7 +224,7 @@ export function UserDashboard() {
               </div>
 
               {/* Exercise preview */}
-              {todayGroup.exercises?.slice(0, 3).map((ex, i) => (
+              {activeWorkout.exercises?.slice(0, 3).map((ex, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm">
                   <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
                     {i + 1}
@@ -289,13 +300,14 @@ export function UserDashboard() {
 
       <WorkoutRegistrationDialog
         groups={assignedGroups}
+        personalWorkout={personalWorkout}
         defaultGroupId={todayGroup?.id}
         open={registrationOpen}
         onOpenChange={setRegistrationOpen}
         onRegistered={() => setRefreshKey((value) => value + 1)}
       />
 
-      {assignedGroups.length > 0 && (
+      {(assignedGroups.length > 0 || personalWorkout) && (
         <Button
           size="icon-lg"
           className="fixed bottom-6 right-6 z-40 rounded-full shadow-lg shadow-primary/30"

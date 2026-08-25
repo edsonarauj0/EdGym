@@ -46,12 +46,22 @@ export interface WorkoutGroup {
   createdAt: Timestamp
 }
 
+export interface PersonalWorkout {
+  id: string
+  userId: string
+  name: string
+  exercises: Exercise[]
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
+}
+
 export interface WorkoutSession {
   id: string
   userId: string
   date: Timestamp
   groupId: string
   groupName: string
+  personalWorkoutId?: string
   durationMinutes: number
   bodyWeightKg: number
   notes: string

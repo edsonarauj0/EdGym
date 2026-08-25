@@ -9,6 +9,7 @@ import { AdminDashboard } from '@/pages/admin/AdminDashboard'
 import { EquipmentPage } from '@/pages/admin/EquipmentPage'
 import { WorkoutGroupsPage } from '@/pages/admin/WorkoutGroupsPage'
 import { UsersPage } from '@/pages/admin/UsersPage'
+import { UserProfilePage } from '@/pages/admin/UserProfilePage'
 import { UserDashboard } from '@/pages/user/UserDashboard'
 import { SessionPage } from '@/pages/user/SessionPage'
 import { CalendarPage } from '@/pages/user/CalendarPage'
@@ -38,6 +39,7 @@ function AppRoutes() {
             <Route path="/admin/equipment" element={<EquipmentPage />} />
             <Route path="/admin/groups" element={<WorkoutGroupsPage />} />
             <Route path="/admin/users" element={<UsersPage />} />
+            <Route path="/admin/users/:uid" element={<UserProfilePage />} />
           </Route>
         </Route>
 

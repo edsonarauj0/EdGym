@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   collection,
   getDocs,
@@ -26,6 +27,7 @@ export function UsersPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [expandedUser, setExpandedUser] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const navigate = useNavigate()
 
   const [newUser, setNewUser] = useState({
     name: '',
@@ -217,6 +219,17 @@ export function UsersPage() {
         </Card>
       ) : (
         <div className="space-y-4">
+          <Card className="overflow-hidden">
+            <CardHeader><CardTitle className="text-base">Perfis dos alunos</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-y bg-muted/40 text-xs uppercase text-muted-foreground"><tr><th className="px-6 py-3 font-medium">Aluno</th><th className="px-6 py-3 font-medium">E-mail</th><th className="px-6 py-3 font-medium">Grupos</th></tr></thead>
+                  <tbody>{users.map((user) => <tr key={user.uid} className="border-b last:border-0 hover:bg-muted/30"><td className="px-6 py-3"><button className="font-semibold text-primary hover:underline" onClick={() => navigate(`/admin/users/${user.uid}`)}>{user.name}</button></td><td className="px-6 py-3 text-muted-foreground">{user.email}</td><td className="px-6 py-3"><Badge variant="secondary">{user.assignedGroupIds?.length || 0}</Badge></td></tr>)}</tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
           {users.map((user) => (
             <Card key={user.uid} className="border-border/50">
               <CardHeader className="pb-3">
@@ -285,6 +298,7 @@ export function UsersPage() {
           ))}
         </div>
       )}
+
     </div>
   )
 }

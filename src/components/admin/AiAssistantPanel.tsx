@@ -136,9 +136,13 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
         timestamp: new Date(),
       }])
     } catch (err: any) {
+      const message = String(err?.message ?? '').toLowerCase()
+      const isQuotaError = message.includes('429') || message.includes('quota') || message.includes('rate limit')
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `❌ Erro ao processar sua pergunta: ${err.message}. Verifique sua chave de API do Gemini.`,
+        content: isQuotaError
+          ? '❌ O limite de uso da API Gemini foi atingido. Aguarde alguns instantes e tente novamente; se o problema persistir, aumente a cota ou o plano no Google AI Studio.'
+          : '❌ Não foi possível processar sua pergunta agora. A IA pode estar temporariamente indisponível; tente novamente em alguns instantes.',
         timestamp: new Date(),
       }])
     } finally {

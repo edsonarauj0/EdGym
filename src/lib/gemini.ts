@@ -7,6 +7,7 @@ import {
 } from '@google/generative-ai'
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import type { Exercise } from '@/types'
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
 
@@ -22,7 +23,7 @@ function getGenAI() {
 // ─── Modelo primário e fallback quando a cota estoura ───────────────────────
 // Ajuste os IDs abaixo caso o AI Studio mostre nomes diferentes para sua conta.
 const MODEL_PRIMARY = 'gemini-3.6-flash'
-const MODEL_FALLBACK = 'gemini-3.6-flash-lite'
+const MODEL_FALLBACK = 'gemini-3.5-flash-lite'
 
 function isTransientGeminiError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : err
@@ -97,6 +98,7 @@ export async function analyzeEquipmentImage(base64Image: string, mimeType = 'ima
     }
   ]
 }
+
 Inclua de 3 a 5 exercícios. Responda somente com o JSON, sem nenhum texto antes ou depois.`,
   ]
 
@@ -115,6 +117,30 @@ Inclua de 3 a 5 exercícios. Responda somente com o JSON, sem nenhum texto antes
 
   const text = result.response.text().trim()
   const json = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(json)
+}
+
+export async function generatePersonalWorkout(
+  studentName: string,
+  goal: string,
+): Promise<{ name: string; exercises: Array<Pick<Exercise, 'name' | 'equipmentName' | 'description' | 'sets' | 'reps' | 'restSeconds' | 'videoSearchQuery'>> }> {
+  const ai = getGenAI()
+  if (!ai) throw new Error('Gemini API key não configurada')
+
+  const prompt = `Crie um treino personalizado de musculação para ${studentName}. Objetivo e contexto: ${goal || 'condicionamento físico geral'}.
+Retorne APENAS JSON válido, sem markdown, neste formato:
+{"name":"nome do treino","exercises":[{"name":"exercício","equipmentName":"aparelho ou equipamento","description":"orientação breve","sets":"3","reps":"10-12","restSeconds":60,"videoSearchQuery":"termo de busca"}]}
+Inclua de 4 a 8 exercícios seguros e práticos em português brasileiro.`
+
+  let result
+  try {
+    result = await retryTransientGeminiRequest(() => ai.getGenerativeModel({ model: MODEL_PRIMARY }).generateContent(prompt))
+  } catch (err) {
+    if (!isTransientGeminiError(err)) throw err
+    result = await retryTransientGeminiRequest(() => ai.getGenerativeModel({ model: MODEL_FALLBACK }).generateContent(prompt))
+  }
+
+  const json = result.response.text().trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
   return JSON.parse(json)
 }
 
