@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { addDoc, collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { CheckSquare, Clock, Dumbbell, ExternalLink, Loader2, Play, Weight } from 'lucide-react'
 import { toast } from 'sonner'
@@ -25,6 +25,34 @@ interface WorkoutRegistrationDialogProps {
   onRegistered: () => void
 }
 
+interface WorkoutDraft {
+  selectedGroupId: string
+  completedIds: string[]
+  exerciseWeights: Record<string, string>
+  startedAt: number
+  lastCheckedAt: number | null
+  form: { bodyWeightKg: string; notes: string }
+}
+
+function getDraftKey(uid: string) {
+  return `edgym_workout_draft_${uid}`
+}
+
+function readDraft(uid: string): WorkoutDraft | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(getDraftKey(uid)) || 'null')
+    return value && typeof value.startedAt === 'number' ? value as WorkoutDraft : null
+  } catch {
+    return null
+  }
+}
+
+function removeDraft(uid: string) {
+  try {
+    localStorage.removeItem(getDraftKey(uid))
+  } catch {}
+}
+
 export function WorkoutRegistrationDialog({
   groups,
   personalWorkout,
@@ -42,17 +70,56 @@ export function WorkoutRegistrationDialog({
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ bodyWeightKg: '', notes: '' })
+  const restoredUserRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (open) {
-      setSelectedGroupId(personalWorkout?.id ?? defaultGroupId ?? groups[0]?.id ?? '')
-      setCompletedIds(new Set())
-      setExerciseWeights({})
-      setStartedAt(null)
-      setLastCheckedAt(null)
-      setForm({ bodyWeightKg: '', notes: '' })
+    if (!appUser || restoredUserRef.current === appUser.uid) return
+    restoredUserRef.current = appUser.uid
+
+    // Um treino que já foi iniciado continua aberto depois de recarregar a tela.
+    if (readDraft(appUser.uid)) {
+      onOpenChange(true)
     }
-  }, [open, defaultGroupId, groups, personalWorkout])
+  }, [appUser, onOpenChange])
+
+  useEffect(() => {
+    if (!open) return
+
+    const draft = appUser ? readDraft(appUser.uid) : null
+    if (draft) {
+      setSelectedGroupId(draft.selectedGroupId)
+      setCompletedIds(new Set(draft.completedIds))
+      setExerciseWeights(draft.exerciseWeights)
+      setStartedAt(draft.startedAt)
+      setLastCheckedAt(draft.lastCheckedAt)
+      setForm(draft.form)
+      return
+    }
+
+    setSelectedGroupId(personalWorkout?.id ?? defaultGroupId ?? groups[0]?.id ?? '')
+    setCompletedIds(new Set())
+    setExerciseWeights({})
+    setStartedAt(null)
+    setLastCheckedAt(null)
+    setForm({ bodyWeightKg: '', notes: '' })
+  }, [open, appUser, defaultGroupId, groups, personalWorkout])
+
+  useEffect(() => {
+    if (!appUser || !open || !startedAt) return
+
+    const draft: WorkoutDraft = {
+      selectedGroupId,
+      completedIds: Array.from(completedIds),
+      exerciseWeights,
+      startedAt,
+      lastCheckedAt,
+      form,
+    }
+
+    try {
+      localStorage.setItem(getDraftKey(appUser.uid), JSON.stringify(draft))
+    } catch {}
+  }, [appUser, completedIds, exerciseWeights, form, lastCheckedAt, open, selectedGroupId, startedAt])
 
   useEffect(() => {
     if (!startedAt) return
@@ -131,6 +198,7 @@ export function WorkoutRegistrationDialog({
       }
 
       toast.success('Treino registrado com sucesso! 💪')
+      removeDraft(appUser.uid)
       onOpenChange(false)
       onRegistered()
     } catch (error) {
