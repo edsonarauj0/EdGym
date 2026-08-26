@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { addDoc, collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
-import { CheckSquare, Clock, Dumbbell, ExternalLink, Loader2, Play, Weight } from 'lucide-react'
+import { CheckSquare, Clock, Dumbbell, ExternalLink, Loader2, Play, Weight, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -50,7 +50,7 @@ function readDraft(uid: string): WorkoutDraft | null {
 function removeDraft(uid: string) {
   try {
     localStorage.removeItem(getDraftKey(uid))
-  } catch {}
+  } catch { }
 }
 
 export function WorkoutRegistrationDialog({
@@ -118,7 +118,7 @@ export function WorkoutRegistrationDialog({
 
     try {
       localStorage.setItem(getDraftKey(appUser.uid), JSON.stringify(draft))
-    } catch {}
+    } catch { }
   }, [appUser, completedIds, exerciseWeights, form, lastCheckedAt, open, selectedGroupId, startedAt])
 
   useEffect(() => {
@@ -149,6 +149,17 @@ export function WorkoutRegistrationDialog({
 
   const startWorkout = () => {
     setStartedAt(Date.now())
+    setLastCheckedAt(null)
+    setCompletedIds(new Set())
+    setExerciseWeights({})
+  }
+
+  const cancelWorkout = () => {
+    if (completedIds.size > 0 && !window.confirm('Cancelar o treino em andamento? O progresso marcado será perdido.')) {
+      return
+    }
+    if (appUser) removeDraft(appUser.uid)
+    setStartedAt(null)
     setLastCheckedAt(null)
     setCompletedIds(new Set())
     setExerciseWeights({})
@@ -264,7 +275,14 @@ export function WorkoutRegistrationDialog({
                     <Play className="size-4" /> Iniciar
                   </Button>
                 ) : (
-                  <span className="flex items-center gap-1 text-sm font-semibold text-primary"><Clock className="size-4" /> {elapsedLabel}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-1 text-sm font-semibold text-primary">
+                      <Clock className="size-4" /> {elapsedLabel}
+                    </span>
+                    <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={cancelWorkout}>
+                      <X className="size-4" /> Cancelar
+                    </Button>
+                  </div>
                 )}
               </div>
               <div className="flex items-center justify-between">
