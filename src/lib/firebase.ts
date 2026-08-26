@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { browserLocalPersistence, initializeAuth } from 'firebase/auth'
 import { initializeFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -15,7 +15,11 @@ if (import.meta.env.DEV) {
 }
 
 export const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+// Mantém a credencial no navegador após recarregamentos e reaberturas.
+// A validade de uma semana é controlada pelo AuthContext.
+export const auth = initializeAuth(app, {
+  persistence: browserLocalPersistence,
+})
 
 // Banco nomeado 'default' (sem parênteses) — criado manualmente no console
 export const db = initializeFirestore(app, {
