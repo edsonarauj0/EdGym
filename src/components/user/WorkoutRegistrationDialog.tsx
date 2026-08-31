@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { addDoc, collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
-import { CheckSquare, Clock, Dumbbell, ExternalLink, Loader2, Play, Weight, X } from 'lucide-react'
+import { addDoc, collection, doc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
+import { CheckSquare, Clock, Dumbbell, ExternalLink, Loader2, Pause, Play, Weight, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { useAuth } from '@/contexts/AuthContext'
@@ -65,12 +65,35 @@ export function WorkoutRegistrationDialog({
   const [selectedGroupId, setSelectedGroupId] = useState(defaultGroupId ?? '')
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
   const [exerciseWeights, setExerciseWeights] = useState<Record<string, string>>({})
+  const [lastWeights, setLastWeights] = useState<Record<string, number>>({})
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ bodyWeightKg: '', notes: '' })
   const restoredUserRef = useRef<string | null>(null)
+
+  const fetchLastWeights = async (groupId: string) => {
+    if (!appUser || !groupId) return
+    try {
+      const q = query(
+        collection(db, 'sessions'),
+        where('userId', '==', appUser.uid),
+        where('groupId', '==', groupId),
+        orderBy('createdAt', 'desc'),
+        limit(1),
+      )
+      const snap = await getDocs(q)
+      if (!snap.empty) {
+        const weights = snap.docs[0].data().exerciseWeights as Record<string, number> | undefined
+        setLastWeights(weights ?? {})
+      } else {
+        setLastWeights({})
+      }
+    } catch {
+      setLastWeights({})
+    }
+  }
 
   useEffect(() => {
     if (!appUser || restoredUserRef.current === appUser.uid) return
@@ -93,15 +116,20 @@ export function WorkoutRegistrationDialog({
       setStartedAt(draft.startedAt)
       setLastCheckedAt(draft.lastCheckedAt)
       setForm(draft.form)
+      setLastWeights({})
       return
     }
 
-    setSelectedGroupId(personalWorkout?.id ?? defaultGroupId ?? groups[0]?.id ?? '')
+    const initialGroupId = personalWorkout?.id ?? defaultGroupId ?? groups[0]?.id ?? ''
+    setSelectedGroupId(initialGroupId)
     setCompletedIds(new Set())
     setExerciseWeights({})
     setStartedAt(null)
     setLastCheckedAt(null)
     setForm({ bodyWeightKg: '', notes: '' })
+    // Busca os pesos da última sessão para este grupo
+    if (initialGroupId) fetchLastWeights(initialGroupId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appUser, defaultGroupId, groups, personalWorkout])
 
   useEffect(() => {
@@ -134,7 +162,13 @@ export function WorkoutRegistrationDialog({
   const selectedGroup = workoutOptions.find((group) => group.id === selectedGroupId) ?? null
   const exercises = selectedGroup?.exercises ?? []
   const progress = exercises.length ? (completedIds.size / exercises.length) * 100 : 0
-  const elapsedSeconds = startedAt ? Math.max(0, Math.floor((currentTime - startedAt) / 1000)) : 0
+
+  // Pausa automática: se passou 1h sem marcar nenhum exercício, congela o cronômetro
+  const INACTIVITY_LIMIT_MS = 60 * 60 * 1000
+  const lastActivity = Math.max(startedAt ?? 0, lastCheckedAt ?? 0)
+  const isTimerPaused = startedAt != null && (currentTime - lastActivity) > INACTIVITY_LIMIT_MS
+  const cappedNow = isTimerPaused ? lastActivity + INACTIVITY_LIMIT_MS : currentTime
+  const elapsedSeconds = startedAt ? Math.max(0, Math.floor((cappedNow - startedAt) / 1000)) : 0
   const elapsedLabel = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:${String(elapsedSeconds % 60).padStart(2, '0')}`
 
   const setExerciseCompleted = (id: string, checked: boolean) => {
@@ -177,10 +211,19 @@ export function WorkoutRegistrationDialog({
     }
 
     const durationMinutes = Math.max(1, Math.ceil((lastCheckedAt - startedAt) / 60000))
+    // Monta os pesos registrados: usa o valor digitado, ou o peso anterior se o campo foi deixado vazio
+    const allExerciseIds = exercises.map((ex, i) => ex.id || `${selectedGroup.id}-${i}`)
     const recordedWeights = Object.fromEntries(
-      Object.entries(exerciseWeights)
-        .filter(([, value]) => value !== '' && !Number.isNaN(Number(value)))
-        .map(([id, value]) => [id, Number(value)]),
+      allExerciseIds.flatMap((id) => {
+        const typed = exerciseWeights[id]
+        if (typed !== undefined && typed !== '' && !Number.isNaN(Number(typed))) {
+          return [[id, Number(typed)]]
+        }
+        if (lastWeights[id] != null) {
+          return [[id, lastWeights[id]]]
+        }
+        return []
+      }),
     )
 
     setSaving(true)
@@ -247,8 +290,10 @@ export function WorkoutRegistrationDialog({
                       setSelectedGroupId(group.id)
                       setCompletedIds(new Set())
                       setExerciseWeights({})
+                      setLastWeights({})
                       setStartedAt(null)
                       setLastCheckedAt(null)
+                      fetchLastWeights(group.id)
                     }}
                     className={`rounded-lg border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
                   >
@@ -268,7 +313,11 @@ export function WorkoutRegistrationDialog({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <Label>Exercícios concluídos</Label>
-                  <p className="mt-1 text-xs text-muted-foreground">A duração final considera sua última marcação.</p>
+                  <p className={`mt-1 text-xs ${isTimerPaused ? 'text-yellow-500 font-medium' : 'text-muted-foreground'}`}>
+                    {isTimerPaused
+                      ? '⏸ Cronômetro pausado por inatividade. Marque um exercício para retomar.'
+                      : 'A duração final considera sua última marcação.'}
+                  </p>
                 </div>
                 {!startedAt ? (
                   <Button type="button" size="sm" onClick={startWorkout}>
@@ -276,8 +325,9 @@ export function WorkoutRegistrationDialog({
                   </Button>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-sm font-semibold text-primary">
-                      <Clock className="size-4" /> {elapsedLabel}
+                    <span className={`flex items-center gap-1 text-sm font-semibold ${isTimerPaused ? 'text-yellow-500' : 'text-primary'}`}>
+                      {isTimerPaused ? <Pause className="size-4" /> : <Clock className="size-4" />}
+                      {elapsedLabel}
                     </span>
                     <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={cancelWorkout}>
                       <X className="size-4" /> Cancelar
@@ -316,7 +366,7 @@ export function WorkoutRegistrationDialog({
                           className="h-8 w-20"
                           value={exerciseWeights[exerciseId] ?? ''}
                           onChange={(event) => setExerciseWeights((previous) => ({ ...previous, [exerciseId]: event.target.value }))}
-                          placeholder="kg"
+                          placeholder={lastWeights[exerciseId] != null ? `↑ ${lastWeights[exerciseId]} kg` : 'kg'}
                           aria-label={`Peso usado em ${exercise.name}, em kg`}
                           disabled={!startedAt}
                         />
