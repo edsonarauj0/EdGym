@@ -5,7 +5,7 @@ import {
   Content,
   GenerativeModel,
 } from '@google/generative-ai'
-import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { addDoc, collection, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { Exercise } from '@/types'
 
@@ -147,6 +147,7 @@ Inclua de 4 a 8 exercícios seguros e práticos em português brasileiro.`
 export interface EdGymContext {
   equipmentList: string[]
   workoutGroups: string[]
+  userWorkoutGroups?: { id: string; name: string }[]
   totalUsers: number
   userName?: string
   isAdmin?: boolean
@@ -203,7 +204,7 @@ const createWorkoutGroupDeclaration: FunctionDeclaration = {
 
 const createPersonalWorkoutGroupDeclaration: FunctionDeclaration = {
   name: 'createPersonalWorkoutGroup',
-  description: 'Cria ou atualiza um grupo de treino pessoal exclusivo para o usuário (ex: Grupo A, Grupo B). Use esta função sempre que o aluno pedir para você montar ou personalizar o treino dele, criando os grupos reais no sistema.',
+  description: 'Cria um grupo de treino pessoal exclusivo para o usuário (ex: Grupo A, Grupo B). Use esta função APENAS quando o aluno pedir para CRIAR ou MONTAR um grupo NOVO. Para alterar um grupo existente, use updatePersonalWorkoutGroup.',
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -231,8 +232,39 @@ const createPersonalWorkoutGroupDeclaration: FunctionDeclaration = {
   },
 }
 
+const updatePersonalWorkoutGroupDeclaration: FunctionDeclaration = {
+  name: 'updatePersonalWorkoutGroup',
+  description: 'Atualiza um grupo de treino pessoal existente do usuário. Use esta função quando o usuário pedir para alterar, adicionar exercícios, remover exercícios ou modificar um treino dele já existente.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      groupId: { type: SchemaType.STRING, description: 'ID do grupo a ser atualizado (obtido do contexto)' },
+      name: { type: SchemaType.STRING, description: 'Novo nome do grupo (pode manter o original ou alterar conforme o novo foco)' },
+      focus: { type: SchemaType.STRING, description: 'Foco muscular do grupo' },
+      durationMinutes: { type: SchemaType.NUMBER, description: 'Duração estimada em minutos' },
+      frequency: { type: SchemaType.STRING, description: 'Frequência semanal recomendada' },
+      exercises: {
+        type: SchemaType.ARRAY,
+        description: 'Lista COMPLETA e atualizada de exercícios do grupo (incluindo os que não mudaram e os novos, sem os removidos)',
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            name: { type: SchemaType.STRING },
+            sets: { type: SchemaType.NUMBER },
+            reps: { type: SchemaType.STRING },
+            equipment: { type: SchemaType.STRING },
+            videoSearchQuery: { type: SchemaType.STRING },
+          },
+          required: ['name', 'sets', 'reps', 'videoSearchQuery'],
+        },
+      },
+    },
+    required: ['groupId', 'name', 'focus', 'exercises'],
+  },
+}
+
 const adminTools = [{ functionDeclarations: [createWorkoutGroupDeclaration] }]
-const userTools = [{ functionDeclarations: [createPersonalWorkoutGroupDeclaration] }]
+const userTools = [{ functionDeclarations: [createPersonalWorkoutGroupDeclaration, updatePersonalWorkoutGroupDeclaration] }]
 
 async function executeFunctionCall(call: { name: string; args: any }, userId?: string): Promise<any> {
   switch (call.name) {
@@ -278,6 +310,27 @@ async function executeFunctionCall(call: { name: string; args: any }, userId?: s
         return { success: false, error: err.message }
       }
     }
+    case 'updatePersonalWorkoutGroup': {
+      try {
+        if (!userId) throw new Error('userId não fornecido')
+        const docRef = doc(db, 'workoutGroups', call.args.groupId)
+        await updateDoc(docRef, {
+          name: call.args.name,
+          focus: call.args.focus,
+          durationMinutes: call.args.durationMinutes ?? null,
+          frequency: call.args.frequency ?? null,
+          exercises: call.args.exercises ?? [],
+          updatedAt: serverTimestamp(),
+        })
+        return {
+          success: true,
+          message: `Grupo de treino pessoal "${call.args.name}" atualizado com sucesso no sistema.`,
+        }
+      } catch (err: any) {
+        console.error('[Gemini] Erro ao atualizar grupo pessoal:', err)
+        return { success: false, error: err.message }
+      }
+    }
     default:
       return { success: false, error: `Função desconhecida: ${call.name}` }
   }
@@ -320,6 +373,7 @@ Você está auxiliando diretamente o ALUNO ${ctx.userName || 'da academia'} a pl
 CONTEXTO DA ACADEMIA:
 - Aparelhos disponíveis para treinar: ${ctx.equipmentList.length > 0 ? ctx.equipmentList.join(', ') : 'Nenhum cadastrado ainda'}
 - Grupos de treino padrão da academia: ${ctx.workoutGroups.length > 0 ? ctx.workoutGroups.join(', ') : 'Nenhum cadastrado ainda'}
+- Meus grupos de treino (já criados pelo aluno): ${ctx.userWorkoutGroups && ctx.userWorkoutGroups.length > 0 ? ctx.userWorkoutGroups.map(g => `{id: "${g.id}", name: "${g.name}"}`).join(', ') : 'Nenhum cadastrado ainda'}
 
 SUAS RESPONSABILIDADES:
 1. Dar dicas de treinos, adaptações e conselhos práticos.
@@ -328,7 +382,9 @@ SUAS RESPONSABILIDADES:
 4. Ser motivador, engajado e agir como o personal "Robô Ed".
 
 IMPORTANTE — AÇÕES NO SISTEMA:
-Quando o aluno pedir para você CRIAR, MONTAR ou SALVAR um grupo de treino (ex: "crie o grupo A de peito", "adicione esses exercícios no meu treino"), você DEVE chamar a função createPersonalWorkoutGroup. Nunca diga apenas que criou em texto; você deve executar a função para cada grupo que montar. Depois que a função executar, avise o aluno que o treino está salvo na aba "Meus Treinos".
+Quando o aluno pedir para você CRIAR um novo grupo de treino, chame a função createPersonalWorkoutGroup.
+Quando o aluno pedir para EDITAR, MUDAR ou ADICIONAR algo em um grupo existente DELE, chame a função updatePersonalWorkoutGroup passando o groupId correto.
+Nunca diga apenas que criou/editou em texto; você deve executar a função. Depois que a função executar, avise o aluno que o treino está salvo na aba "Meus Treinos".
 
 FORMATO DE RESPOSTAS:
 - Use linguagem clara, próxima e motivadora (estilo personal trainer).

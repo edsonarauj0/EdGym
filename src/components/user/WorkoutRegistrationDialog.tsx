@@ -365,6 +365,7 @@ export function WorkoutRegistrationDialog({
                       <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
                         <div className="flex shrink-0 flex-col items-center gap-2 sm:flex-row sm:gap-3">
                           <Checkbox
+                          className='size-6'
                             checked={checked}
                             onCheckedChange={(value) => setExerciseCompleted(exerciseId, value === true)}
                             disabled={!startedAt}

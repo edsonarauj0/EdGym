@@ -98,9 +98,14 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
         getDocs(collection(db, 'users')),
       ])
 
+      const userGroups = groupsSnap.docs
+        .filter(d => d.data().ownerId === appUser?.uid)
+        .map(d => ({ id: d.id, name: d.data().name as string }))
+
       const ctx: EdGymContext = {
         equipmentList: equipSnap.docs.map(d => d.data().name as string).filter(Boolean),
-        workoutGroups: groupsSnap.docs.map(d => d.data().name as string).filter(Boolean),
+        workoutGroups: groupsSnap.docs.filter(d => !d.data().ownerId).map(d => d.data().name as string).filter(Boolean),
+        userWorkoutGroups: userGroups,
         totalUsers: usersSnap.size,
         userName: appUser?.name,
         isAdmin,
