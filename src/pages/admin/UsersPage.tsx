@@ -235,7 +235,7 @@ export function UsersPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                    <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold">
                       {user.name?.charAt(0).toUpperCase() || 'U'}
                     </div>
                     <div>
@@ -278,7 +278,7 @@ export function UsersPage() {
                           }`}
                         >
                           <div
-                            className="w-3 h-3 rounded-full shrink-0"
+                            className="w-3 h-3 rounded-lg shrink-0"
                             style={{ backgroundColor: group.colorHex || '#22c55e' }}
                           />
                           <span className="text-sm flex-1">{group.name}</span>

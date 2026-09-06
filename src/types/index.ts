@@ -44,6 +44,7 @@ export interface WorkoutGroup {
   assignedUserIds: string[]
   colorHex: string    // visual identifier
   createdAt: Timestamp
+  ownerId?: string    // If present, it's a personal group for this user
 }
 
 export interface PersonalWorkout {

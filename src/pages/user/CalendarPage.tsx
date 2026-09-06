@@ -144,7 +144,7 @@ export function CalendarPage() {
                     key={day.toISOString()}
                     onClick={() => handleDayClick(day)}
                     className={`
-                      relative flex flex-col items-center justify-center rounded-xl p-1 h-10 text-sm font-medium transition-all
+                      relative flex flex-col items-center justify-center rounded-lg p-1 h-10 text-sm font-medium transition-all
                       ${!isCurrentMonth ? 'opacity-30' : ''}
                       ${isSelected ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}
                       ${trained ? 'bg-primary/20 text-primary hover:bg-primary/30' : 'hover:bg-secondary'}
@@ -154,7 +154,7 @@ export function CalendarPage() {
                     <span>{format(day, 'd')}</span>
                     {trained && daySession && (
                       <div
-                        className="w-1.5 h-1.5 rounded-full mt-0.5"
+                        className="w-1.5 h-1.5 rounded-lg mt-0.5"
                         style={{ backgroundColor: '#22c55e' }}
                       />
                     )}

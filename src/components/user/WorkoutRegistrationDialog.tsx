@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
+import confetti from 'canvas-confetti'
 
 interface WorkoutRegistrationDialogProps {
   groups: WorkoutGroup[]
@@ -129,7 +130,7 @@ export function WorkoutRegistrationDialog({
     setForm({ bodyWeightKg: '', notes: '' })
     // Busca os pesos da última sessão para este grupo
     if (initialGroupId) fetchLastWeights(initialGroupId)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appUser, defaultGroupId, groups, personalWorkout])
 
   useEffect(() => {
@@ -252,6 +253,14 @@ export function WorkoutRegistrationDialog({
       }
 
       toast.success('Treino registrado com sucesso! 💪')
+
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#22c55e', '#3b82f6', '#a855f7', '#f97316', '#eab308']
+      })
+
       removeDraft(appUser.uid)
       onOpenChange(false)
       onRegistered()
@@ -265,7 +274,10 @@ export function WorkoutRegistrationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-xl gap-0 overflow-y-auto p-0 sm:max-w-xl" aria-describedby="workout-registration-description">
+      <DialogContent
+        className="max-h-[calc(100vh-3rem)] w-[calc(100%-3rem)] max-w-xl gap-0 overflow-x-hidden overflow-y-auto p-0 sm:w-full sm:max-w-xl"
+        aria-describedby="workout-registration-description"
+      >
         <DialogHeader className="p-6 pb-4 pr-12">
           <DialogTitle className="flex items-center gap-2">
             <CheckSquare className="size-5 text-primary" />
@@ -295,13 +307,13 @@ export function WorkoutRegistrationDialog({
                       setLastCheckedAt(null)
                       fetchLastWeights(group.id)
                     }}
-                    className={`rounded-lg border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                    className={`min-w-0 rounded-lg border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
                   >
-                    <span className="flex items-center gap-2 font-medium">
-                      <span className="size-2 rounded-full" style={{ backgroundColor: group.colorHex || '#22c55e' }} />
-                      {group.name}
+                    <span className="flex min-w-0 items-center gap-2 font-medium">
+                      <span className="size-2 shrink-0 rounded-lg" style={{ backgroundColor: group.colorHex || '#22c55e' }} />
+                      <span className="min-w-0 break-words">{group.name}</span>
                     </span>
-                    {group.muscleTarget && <span className="mt-1 block text-xs text-muted-foreground">{group.muscleTarget}</span>}
+                    {group.muscleTarget && <span className="mt-1 block break-words text-xs text-muted-foreground">{group.muscleTarget}</span>}
                   </button>
                 )
               })}
@@ -310,8 +322,8 @@ export function WorkoutRegistrationDialog({
 
           {selectedGroup && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
                   <Label>Exercícios concluídos</Label>
                   <p className={`mt-1 text-xs ${isTimerPaused ? 'text-yellow-500 font-medium' : 'text-muted-foreground'}`}>
                     {isTimerPaused
@@ -320,11 +332,11 @@ export function WorkoutRegistrationDialog({
                   </p>
                 </div>
                 {!startedAt ? (
-                  <Button type="button" size="sm" onClick={startWorkout}>
+                  <Button type="button" size="sm" className="shrink-0" onClick={startWorkout}>
                     <Play className="size-4" /> Iniciar
                   </Button>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <span className={`flex items-center gap-1 text-sm font-semibold ${isTimerPaused ? 'text-yellow-500' : 'text-primary'}`}>
                       {isTimerPaused ? <Pause className="size-4" /> : <Clock className="size-4" />}
                       {elapsedLabel}
@@ -342,46 +354,95 @@ export function WorkoutRegistrationDialog({
               <Progress value={progress} className="h-2" />
               <div className="space-y-2">
                 {exercises.map((exercise: Exercise, index) => {
-                  // Grupos criados pela IA podem não ter `id` por exercício.
-                  // O fallback impede que todos usem a mesma chave (undefined).
                   const exerciseId = exercise.id || `${selectedGroup.id}-${index}`
                   const checked = completedIds.has(exerciseId)
                   return (
-                    <div key={exerciseId} className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${checked ? 'border-primary/50 bg-primary/5' : 'border-border/60'}`}>
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(value) => setExerciseCompleted(exerciseId, value === true)}
-                        disabled={!startedAt}
-                        aria-label={`Marcar ${exercise.name} como concluído`}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className={`block text-sm font-medium ${checked ? 'text-muted-foreground line-through' : ''}`}>{exercise.name}</span>
-                        <span className="block text-xs text-muted-foreground">{exercise.equipmentName} · {exercise.restSeconds}s de descanso</span>
-                      </span>
-                      <div className="flex shrink-0 items-center gap-2">
+                    <div
+                      key={exerciseId}
+                      className={`flex flex-col gap-3 rounded-lg border p-3 transition-colors sm:flex-row sm:items-center sm:justify-between ${checked ? 'border-primary/50 bg-primary/5' : 'border-border/60'}`}
+                    >
+                      {/* Lado esquerdo (Desktop) / Linha principal (Mobile) */}
+                      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+                        <div className="flex shrink-0 flex-col items-center gap-2 sm:flex-row sm:gap-3">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => setExerciseCompleted(exerciseId, value === true)}
+                            disabled={!startedAt}
+                            aria-label={`Marcar ${exercise.name} como concluído`}
+                          />
+
+                          {/* Vídeo visível apenas no Mobile */}
+                          <a
+                            href={getYouTubeSearchUrl(exercise.videoSearchQuery || exercise.name)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80 sm:hidden"
+                            aria-label={`Ver vídeo de ${exercise.name}`}
+                            title="Ver vídeo"
+                          >
+                            <ExternalLink className="size-4" />
+                          </a>
+
+                          {/* BADGE MOBILE CORRIGIDO: 3x em cima, 10-12 embaixo */}
+                          <Badge
+                            variant="outline"
+                            className="flex h-auto flex-col items-center justify-center gap-0.5 px-2 py-1 text-center font-semibold leading-none sm:hidden"
+                          >
+                            <span className="text-[11px] leading-tight">{exercise.sets}x</span>
+                            <span className="text-[10px] leading-tight text-muted-foreground">{exercise.reps}</span>
+                          </Badge>
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <span className={`block break-words pt-0.5 text-base font-medium sm:pt-0 ${checked ? 'text-muted-foreground line-through' : ''}`}>
+                            {exercise.name}
+                          </span>
+                          {/* Input de peso no Mobile */}
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            className="mt-2 h-8 w-50 sm:hidden"
+                            value={exerciseWeights[exerciseId] ?? ''}
+                            onChange={(event) => setExerciseWeights((previous) => ({ ...previous, [exerciseId]: event.target.value }))}
+                            placeholder={lastWeights[exerciseId] != null ? `↑ ${lastWeights[exerciseId]} kg` : 'kg'}
+                            aria-label={`Peso usado em ${exercise.name}, em kg`}
+                            disabled={!startedAt}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Lado direito (Desktop): Fixo na ponta direita com sm:ml-auto */}
+                      <div className="hidden shrink-0 items-center gap-2 sm:ml-auto sm:flex sm:justify-end">
                         <Input
                           type="number"
                           min="0"
                           step="0.5"
-                          className="h-8 w-20"
+                          className="h-8 w-20 min-w-0 shrink-0"
                           value={exerciseWeights[exerciseId] ?? ''}
                           onChange={(event) => setExerciseWeights((previous) => ({ ...previous, [exerciseId]: event.target.value }))}
                           placeholder={lastWeights[exerciseId] != null ? `↑ ${lastWeights[exerciseId]} kg` : 'kg'}
                           aria-label={`Peso usado em ${exercise.name}, em kg`}
                           disabled={!startedAt}
                         />
-                        <Badge variant="outline" className="text-xs">{exercise.sets}x{exercise.reps}</Badge>
+
+                        {/* Badge do Desktop: padrão horizontal */}
+                        <Badge variant="outline" className="shrink-0 text-xs">
+                          {exercise.sets}x{exercise.reps}
+                        </Badge>
+
+                        {/* Link de vídeo do Desktop */}
+                        <a
+                          href={getYouTubeSearchUrl(exercise.videoSearchQuery || exercise.name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 p-1 text-primary hover:text-primary/80"
+                          aria-label={`Ver vídeo de ${exercise.name}`}
+                          title="Ver vídeo"
+                        >
+                          <ExternalLink className="size-4" />
+                        </a>
                       </div>
-                      <a
-                        href={getYouTubeSearchUrl(exercise.videoSearchQuery || exercise.name)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 text-primary hover:text-primary/80"
-                        aria-label={`Ver vídeo de ${exercise.name}`}
-                        title="Ver vídeo"
-                      >
-                        <ExternalLink className="size-4" />
-                      </a>
                     </div>
                   )
                 })}
@@ -401,7 +462,7 @@ export function WorkoutRegistrationDialog({
           </div>
         </div>
 
-        <DialogFooter className="sticky bottom-0">
+        <DialogFooter className="sticky bottom-0 mx-0 mb-0 gap-2 border-t bg-background p-4 sm:p-6">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || !selectedGroup}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Dumbbell className="size-4" />}

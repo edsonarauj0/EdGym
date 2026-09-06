@@ -15,7 +15,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { AiAssistantPanel } from '@/components/admin/AiAssistantPanel'
+import { AiAssistantPanel } from '@/components/shared/AiAssistantPanel'
 
 const adminLinks = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -100,15 +100,15 @@ export function AdminLayout() {
             <div className="w-4 h-4 shrink-0 relative">
               <Bot className="w-4 h-4 text-primary" />
             </div>
-            <span className="flex-1 text-left">Personal Trainer IA</span>
-            <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+            <span className="flex-1 text-left">Robô Ed (IA)</span>
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-lg animate-pulse" />
           </button>
         </nav>
 
         {/* User info + logout */}
         <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3 px-3 py-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
               {appUser?.name?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div className="flex-1 min-w-0">

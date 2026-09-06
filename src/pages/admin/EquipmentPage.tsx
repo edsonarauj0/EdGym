@@ -171,7 +171,7 @@ export function EquipmentPage() {
           {/* Upload area */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-border rounded-xl p-8 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all text-center group"
+            className="border-2 border-dashed border-border rounded-lg p-8 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all text-center group"
           >
             {preview ? (
               <img
@@ -199,7 +199,7 @@ export function EquipmentPage() {
 
           {/* AI Analysis result */}
           {aiResult && (
-            <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-4">
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" />
                 <h3 className="font-semibold text-primary">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, doc, getDoc, query, where, orderBy, limit } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, query, where, orderBy, limit, getCountFromServer } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PersonalWorkout, WorkoutGroup, WorkoutSession } from '@/types'
@@ -29,6 +29,7 @@ export function UserDashboard() {
   const [personalWorkout, setPersonalWorkout] = useState<PersonalWorkout | null>(null)
   const [recentSessions, setRecentSessions] = useState<WorkoutSession[]>([])
   const [streak, setStreak] = useState(0)
+  const [totalSessions, setTotalSessions] = useState(0)
   const [loading, setLoading] = useState(true)
   const [registrationOpen, setRegistrationOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -52,6 +53,12 @@ export function UserDashboard() {
         const { assignedGroupIds = [], currentGroupIndex = 0 } = appUser
         const validGroupIds = assignedGroupIds.filter((id: string) => id && id.trim() !== '')
 
+        const pgQuery = query(collection(db, 'workoutGroups'), where('ownerId', '==', appUser.uid))
+        const pgSnap = await getDocs(pgQuery)
+        const personalGroups = pgSnap.docs.map((d) => ({ id: d.id, ...d.data() } as WorkoutGroup))
+
+        let allGroups = [...personalGroups]
+
         if (validGroupIds.length > 0) {
           const groupSnapshots = await Promise.all(
             validGroupIds.map((groupId: string) => getDoc(doc(db, 'workoutGroups', groupId)))
@@ -59,10 +66,17 @@ export function UserDashboard() {
           const groups = groupSnapshots
             .filter((snapshot) => snapshot.exists())
             .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() } as WorkoutGroup))
-          setAssignedGroups(groups)
+          
+          allGroups = [...allGroups, ...groups]
+        }
 
-          const groupId = validGroupIds[currentGroupIndex % validGroupIds.length]
-          setTodayGroup(groups.find((group) => group.id === groupId) ?? groups[0] ?? null)
+        setAssignedGroups(allGroups)
+
+        if (allGroups.length > 0) {
+          // just use the currentGroupIndex logic if there are any assigned global groups, else fallback to personal
+          const totalLength = validGroupIds.length > 0 ? validGroupIds.length : allGroups.length
+          const idx = currentGroupIndex % totalLength
+          setTodayGroup(allGroups[idx] ?? allGroups[0])
         }
 
         // Load recent sessions — orderBy('createdAt') requires composite index
@@ -72,42 +86,56 @@ export function UserDashboard() {
             collection(db, 'sessions'),
             where('userId', '==', appUser.uid),
             orderBy('createdAt', 'desc'),
-            limit(5)
+            limit(50)
           )
           const sessionsSnap = await getDocs(sessionsQuery)
           const sessions = sessionsSnap.docs.map((d) => ({
             id: d.id,
             ...d.data(),
           })) as WorkoutSession[]
-          setRecentSessions(sessions)
+          setRecentSessions(sessions.slice(0, 5))
 
-          // Calculate streak
-          let streakCount = 0
-          const today = new Date()
-          today.setHours(0, 0, 0, 0)
-          for (let i = 0; i < sessions.length; i++) {
-            const sessionDate = sessions[i].date?.toDate?.()
-            if (!sessionDate) break
-            sessionDate.setHours(0, 0, 0, 0)
-            const expected = new Date(today)
-            expected.setDate(today.getDate() - i)
-            if (sessionDate.getTime() === expected.getTime()) streakCount++
-            else break
-          }
-          setStreak(streakCount)
+          // Calculate unique days trained this month
+          const currentMonth = new Date().getMonth()
+          const currentYear = new Date().getFullYear()
+          const uniqueDays = new Set<string>()
+          
+          sessions.forEach((s) => {
+            const d = s.date?.toDate?.()
+            if (d && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+              uniqueDays.add(d.toISOString().split('T')[0])
+            }
+          })
+          
+          setStreak(uniqueDays.size)
         } catch (sessionErr) {
           // Index not ready yet — load without orderBy
           console.warn('[Dashboard] Índice Firestore não pronto, carregando sem ordenação:', sessionErr)
           const simpleQuery = query(
             collection(db, 'sessions'),
             where('userId', '==', appUser.uid),
-            limit(5)
+            limit(50)
           )
           const sessionsSnap = await getDocs(simpleQuery)
-          setRecentSessions(
-            sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as WorkoutSession[]
-          )
+          const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as WorkoutSession[]
+          setRecentSessions(sessions.slice(0, 5))
+          
+          const currentMonth = new Date().getMonth()
+          const currentYear = new Date().getFullYear()
+          const uniqueDays = new Set<string>()
+          sessions.forEach((s) => {
+            const d = s.date?.toDate?.()
+            if (d && d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+              uniqueDays.add(d.toISOString().split('T')[0])
+            }
+          })
+          setStreak(uniqueDays.size)
         }
+
+        // Get total sessions count
+        const countQuery = query(collection(db, 'sessions'), where('userId', '==', appUser.uid))
+        const countSnap = await getCountFromServer(countQuery)
+        setTotalSessions(countSnap.data().count)
       } catch (err) {
         console.error('[Dashboard] Erro ao carregar:', err)
       } finally {
@@ -148,10 +176,10 @@ export function UserDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <Flame className="w-4 h-4 text-orange-400" />
-              <span className="text-xs text-muted-foreground">Sequência</span>
+              <span className="text-xs text-muted-foreground">Frequência</span>
             </div>
             <p className="text-3xl font-bold text-orange-400">{streak}</p>
-            <p className="text-xs text-muted-foreground">dias seguidos</p>
+            <p className="text-xs text-muted-foreground">neste mês</p>
           </CardContent>
         </Card>
 
@@ -172,7 +200,7 @@ export function UserDashboard() {
               <TrendingUp className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">Treinos totais</span>
             </div>
-            <p className="text-3xl font-bold text-primary">{recentSessions.length}</p>
+            <p className="text-3xl font-bold text-primary">{totalSessions}</p>
             <p className="text-xs text-muted-foreground">registrados</p>
           </CardContent>
         </Card>
@@ -183,12 +211,12 @@ export function UserDashboard() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+              <div className="w-2 h-2 bg-primary rounded-lg animate-pulse" />
               <CardTitle className="text-lg">Treino de Hoje</CardTitle>
             </div>
             {activeWorkout && (
               <div
-                className="w-4 h-4 rounded-full"
+                className="w-4 h-4 rounded-lg"
                 style={{ backgroundColor: personalWorkout ? '#a855f7' : todayGroup?.colorHex || '#22c55e' }}
               />
             )}
@@ -226,7 +254,7 @@ export function UserDashboard() {
               {/* Exercise preview */}
               {activeWorkout.exercises?.slice(0, 3).map((ex, i) => (
                 <div key={i} className="flex items-center gap-3 text-sm">
-                  <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                  <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
                     {i + 1}
                   </div>
                   <span className="flex-1">{ex.name}</span>
@@ -310,7 +338,7 @@ export function UserDashboard() {
       {(assignedGroups.length > 0 || personalWorkout) && (
         <Button
           size="icon-lg"
-          className="fixed bottom-6 right-6 z-40 rounded-full shadow-lg shadow-primary/30"
+          className="fixed bottom-6 right-6 z-40 rounded-lg shadow-lg shadow-primary/30 p-5"
           onClick={() => setRegistrationOpen(true)}
           aria-label="Registrar treino"
           title="Registrar treino"

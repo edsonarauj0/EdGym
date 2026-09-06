@@ -5,7 +5,7 @@ import {
   Content,
   GenerativeModel,
 } from '@google/generative-ai'
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import type { Exercise } from '@/types'
 
@@ -148,6 +148,9 @@ export interface EdGymContext {
   equipmentList: string[]
   workoutGroups: string[]
   totalUsers: number
+  userName?: string
+  isAdmin?: boolean
+  userId?: string
 }
 
 // ─── Function calling: ferramentas que a IA pode executar no sistema ───────
@@ -198,9 +201,40 @@ const createWorkoutGroupDeclaration: FunctionDeclaration = {
   },
 }
 
-const edGymTools = [{ functionDeclarations: [createWorkoutGroupDeclaration] }]
+const createPersonalWorkoutGroupDeclaration: FunctionDeclaration = {
+  name: 'createPersonalWorkoutGroup',
+  description: 'Cria ou atualiza um grupo de treino pessoal exclusivo para o usuário (ex: Grupo A, Grupo B). Use esta função sempre que o aluno pedir para você montar ou personalizar o treino dele, criando os grupos reais no sistema.',
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      name: { type: SchemaType.STRING, description: 'Nome do grupo, ex: "Grupo A - Peito e Tríceps"' },
+      focus: { type: SchemaType.STRING, description: 'Foco muscular do grupo' },
+      durationMinutes: { type: SchemaType.NUMBER, description: 'Duração estimada em minutos' },
+      frequency: { type: SchemaType.STRING, description: 'Frequência semanal recomendada' },
+      exercises: {
+        type: SchemaType.ARRAY,
+        description: 'Lista de exercícios do grupo',
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            name: { type: SchemaType.STRING },
+            sets: { type: SchemaType.NUMBER },
+            reps: { type: SchemaType.STRING },
+            equipment: { type: SchemaType.STRING },
+            videoSearchQuery: { type: SchemaType.STRING },
+          },
+          required: ['name', 'sets', 'reps', 'videoSearchQuery'],
+        },
+      },
+    },
+    required: ['name', 'focus', 'exercises'],
+  },
+}
 
-async function executeFunctionCall(call: { name: string; args: any }): Promise<any> {
+const adminTools = [{ functionDeclarations: [createWorkoutGroupDeclaration] }]
+const userTools = [{ functionDeclarations: [createPersonalWorkoutGroupDeclaration] }]
+
+async function executeFunctionCall(call: { name: string; args: any }, userId?: string): Promise<any> {
   switch (call.name) {
     case 'createWorkoutGroup': {
       try {
@@ -222,13 +256,36 @@ async function executeFunctionCall(call: { name: string; args: any }): Promise<a
         return { success: false, error: err.message }
       }
     }
+    case 'createPersonalWorkoutGroup': {
+      try {
+        if (!userId) throw new Error('userId não fornecido')
+        const docRef = await addDoc(collection(db, 'workoutGroups'), {
+          name: call.args.name,
+          focus: call.args.focus,
+          durationMinutes: call.args.durationMinutes ?? null,
+          frequency: call.args.frequency ?? null,
+          exercises: call.args.exercises ?? [],
+          ownerId: userId,
+          createdAt: serverTimestamp(),
+        })
+        return {
+          success: true,
+          id: docRef.id,
+          message: `Grupo de treino pessoal "${call.args.name}" criado com sucesso no sistema.`,
+        }
+      } catch (err: any) {
+        console.error('[Gemini] Erro ao criar grupo pessoal:', err)
+        return { success: false, error: err.message }
+      }
+    }
     default:
       return { success: false, error: `Função desconhecida: ${call.name}` }
   }
 }
 
 function buildSystemPrompt(ctx: EdGymContext): string {
-  return `Você é um personal trainer especialista com 15 anos de experiência em musculação, funcional e periodização de treinos.
+  if (ctx.isAdmin) {
+    return `Você é um personal trainer especialista chamado Robô Ed, com 15 anos de experiência em musculação, funcional e periodização de treinos.
 
 Você está auxiliando o ADMINISTRADOR da academia EdGym a planejar e organizar os treinos dos alunos.
 
@@ -254,6 +311,30 @@ FORMATO DE RESPOSTAS (quando não usar funções):
 - Use listas com bullet points para exercícios
 
 Seja específico, prático e baseie suas recomendações em evidências científicas.`
+  }
+
+  return `Você é o Robô Ed, um personal trainer especialista e parceiro de treinos, com 15 anos de experiência.
+
+Você está auxiliando diretamente o ALUNO ${ctx.userName || 'da academia'} a planejar e personalizar seus próprios treinos, e pegando dicas de outros treinos.
+
+CONTEXTO DA ACADEMIA:
+- Aparelhos disponíveis para treinar: ${ctx.equipmentList.length > 0 ? ctx.equipmentList.join(', ') : 'Nenhum cadastrado ainda'}
+- Grupos de treino padrão da academia: ${ctx.workoutGroups.length > 0 ? ctx.workoutGroups.join(', ') : 'Nenhum cadastrado ainda'}
+
+SUAS RESPONSABILIDADES:
+1. Dar dicas de treinos, adaptações e conselhos práticos.
+2. Ajudar o aluno a personalizar o treino dele usando os aparelhos da academia.
+3. Explicar como fazer exercícios, alternativas, etc.
+4. Ser motivador, engajado e agir como o personal "Robô Ed".
+
+IMPORTANTE — AÇÕES NO SISTEMA:
+Quando o aluno pedir para você CRIAR, MONTAR ou SALVAR um grupo de treino (ex: "crie o grupo A de peito", "adicione esses exercícios no meu treino"), você DEVE chamar a função createPersonalWorkoutGroup. Nunca diga apenas que criou em texto; você deve executar a função para cada grupo que montar. Depois que a função executar, avise o aluno que o treino está salvo na aba "Meus Treinos".
+
+FORMATO DE RESPOSTAS:
+- Use linguagem clara, próxima e motivadora (estilo personal trainer).
+- Use **negrito** para destacar informações importantes.
+- Use listas com bullet points para exercícios.
+- Seja prático e direto.`
 }
 
 // ─── Sessão de chat própria (bypassa o role "function" do ChatSession padrão) ──
@@ -269,10 +350,12 @@ function buildModel(ctx: EdGymContext, modelName: string): GenerativeModel {
   const ai = getGenAI()
   if (!ai) throw new Error('Gemini API key não configurada')
 
+  const tools = ctx.isAdmin ? adminTools : userTools
+
   return ai.getGenerativeModel({
     model: modelName,
     systemInstruction: buildSystemPrompt(ctx),
-    tools: edGymTools,
+    tools: tools,
     generationConfig: {
       temperature: 0.8,
       maxOutputTokens: 2048,
@@ -332,7 +415,7 @@ export async function sendMessage(
       calls.map(async (call) => ({
         functionResponse: {
           name: call.name,
-          response: await executeFunctionCall(call),
+          response: await executeFunctionCall(call, session.ctx.userId),
         },
       }))
     )

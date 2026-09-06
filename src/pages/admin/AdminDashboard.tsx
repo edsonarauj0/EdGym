@@ -94,7 +94,7 @@ export function AdminDashboard() {
           <Card key={stat.label} className="border-border/50">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center`}>
+                <div className={`w-12 h-12 rounded-lg ${stat.bg} flex items-center justify-center`}>
                   <stat.icon className={`w-6 h-6 ${stat.color}`} />
                 </div>
                 <div>

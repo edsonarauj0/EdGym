@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { FunctionDeclaration, SchemaType } from '@google/generative-ai'
+import { useAuth } from '@/contexts/AuthContext'
 
 
 interface Message {
@@ -63,6 +64,7 @@ const createWorkoutGroupDeclaration: FunctionDeclaration = {
   },
 }
 export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
+  const { appUser, isAdmin } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -100,16 +102,41 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
         equipmentList: equipSnap.docs.map(d => d.data().name as string).filter(Boolean),
         workoutGroups: groupsSnap.docs.map(d => d.data().name as string).filter(Boolean),
         totalUsers: usersSnap.size,
+        userName: appUser?.name,
+        isAdmin,
+        userId: appUser?.uid,
       }
 
       setEdGymContext(ctx)
       const newSession = createEdGymChatSession(ctx)
       setSession(newSession)
 
+      const cacheKey = `edgym_chat_${appUser?.uid}`
+      const cached = localStorage.getItem(cacheKey)
+
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          if (parsed.messages && parsed.messages.length > 0) {
+            setMessages(parsed.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })))
+            if (newSession && parsed.geminiContents) {
+              newSession.contents = parsed.geminiContents
+            }
+            return
+          }
+        } catch(e) {
+          console.error('[AI] Erro ao ler cache local:', e)
+        }
+      }
+
       // Mensagem de boas-vindas
+      const welcomeMsg = isAdmin 
+        ? `Olá! Sou o Robô Ed, o assistente de personal training. 💪\n\nTenho acesso ao contexto atual da academia:\n- **${ctx.equipmentList.length}** aparelhos cadastrados\n- **${ctx.workoutGroups.length}** grupos de treino\n- **${ctx.totalUsers}** alunos\n\nComo posso ajudar você a planejar os treinos da academia hoje?`
+        : `Fala ${appUser?.name || 'campeão'}! Aqui é o Robô Ed, seu personal trainer IA. 💪\n\nEstou aqui para ajudar a montar e personalizar seus treinos usando os aparelhos da academia.\n\nQual é o seu foco hoje?`
+      
       setMessages([{
         role: 'assistant',
-        content: `Olá! Sou seu assistente de personal training. 💪\n\nTenho acesso ao contexto atual da academia:\n- **${ctx.equipmentList.length}** aparelhos cadastrados\n- **${ctx.workoutGroups.length}** grupos de treino\n- **${ctx.totalUsers}** alunos\n\nComo posso ajudar você a planejar os treinos hoje?`,
+        content: welcomeMsg,
         timestamp: new Date(),
       }])
     } catch (err) {
@@ -118,6 +145,15 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
       setIsLoadingContext(false)
     }
   }
+
+  useEffect(() => {
+    if (!appUser?.uid || !session || messages.length === 0) return
+    const cacheKey = `edgym_chat_${appUser.uid}`
+    localStorage.setItem(cacheKey, JSON.stringify({
+      messages,
+      geminiContents: session.contents
+    }))
+  }, [messages, session, appUser?.uid])
 
   async function handleSend(text?: string) {
     const messageText = text || input.trim()
@@ -151,6 +187,9 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
   }
 
   function handleReset() {
+    if (appUser?.uid) {
+      localStorage.removeItem(`edgym_chat_${appUser.uid}`)
+    }
     setMessages([])
     setSession(null)
     initSession()
@@ -182,13 +221,13 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-gradient-to-r from-primary/10 to-purple-500/10">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shadow-lg shadow-primary/20">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shadow-lg shadow-primary/20">
               <Bot className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="font-semibold text-sm">Personal Trainer IA</p>
+              <p className="font-semibold text-sm">Robô Ed (IA)</p>
               <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                <div className="w-1.5 h-1.5 bg-green-400 rounded-lg animate-pulse" />
                 <p className="text-xs text-muted-foreground">Powered by Gemini</p>
               </div>
             </div>
@@ -233,7 +272,7 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
                   className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                 >
                   {/* Avatar */}
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                     msg.role === 'assistant'
                       ? 'bg-gradient-to-br from-primary to-purple-500'
                       : 'bg-secondary'
@@ -245,7 +284,7 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
                   </div>
 
                   {/* Bubble */}
-                  <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
+                  <div className={`max-w-[85%] rounded-lg px-4 py-3 text-sm ${
                     msg.role === 'assistant'
                       ? 'bg-secondary/60 rounded-tl-sm'
                       : 'bg-primary text-primary-foreground rounded-tr-sm'
@@ -264,14 +303,14 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
               {/* Typing indicator */}
               {isLoading && (
                 <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shrink-0">
                     <Bot className="w-4 h-4 text-white" />
                   </div>
-                  <div className="bg-secondary/60 rounded-2xl rounded-tl-sm px-4 py-3">
+                  <div className="bg-secondary/60 rounded-lg rounded-tl-sm px-4 py-3">
                     <div className="flex gap-1 items-center h-4">
-                      <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:0ms]" />
-                      <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:150ms]" />
-                      <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:300ms]" />
+                      <div className="w-2 h-2 bg-primary/60 rounded-lg animate-bounce [animation-delay:0ms]" />
+                      <div className="w-2 h-2 bg-primary/60 rounded-lg animate-bounce [animation-delay:150ms]" />
+                      <div className="w-2 h-2 bg-primary/60 rounded-lg animate-bounce [animation-delay:300ms]" />
                     </div>
                   </div>
                 </div>
@@ -295,7 +334,7 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
                   key={qp.label}
                   onClick={() => handleSend(qp.prompt)}
                   disabled={isLoading || isLoadingContext}
-                  className="text-xs px-3 py-1.5 rounded-full border border-border/60 bg-secondary/40 hover:bg-secondary hover:border-primary/40 transition-all disabled:opacity-50"
+                  className="text-xs px-3 py-1.5 rounded-lg border border-border/60 bg-secondary/40 hover:bg-secondary hover:border-primary/40 transition-all disabled:opacity-50"
                 >
                   {qp.emoji} {qp.label}
                 </button>
@@ -306,7 +345,7 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
 
         {/* Input */}
         <div className="p-4 border-t border-border">
-          <div className="flex gap-2 items-end bg-secondary/40 rounded-2xl border border-border/60 focus-within:border-primary/50 focus-within:bg-secondary/60 transition-all px-4 py-3">
+          <div className="flex gap-2 items-end bg-secondary/40 rounded-lg border border-border/60 focus-within:border-primary/50 focus-within:bg-secondary/60 transition-all px-4 py-3">
             <textarea
               ref={inputRef}
               value={input}
@@ -325,7 +364,7 @@ export function AiAssistantPanel({ isOpen, onClose }: AiAssistantPanelProps) {
             />
             <Button
               size="icon"
-              className="w-8 h-8 rounded-xl shrink-0"
+              className="w-8 h-8 rounded-lg shrink-0"
               onClick={() => handleSend()}
               disabled={!input.trim() || isLoading || isLoadingContext}
             >

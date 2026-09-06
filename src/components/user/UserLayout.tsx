@@ -7,14 +7,17 @@ import {
   LogOut,
   Menu,
   X,
+  Bot,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { AiAssistantPanel } from '@/components/shared/AiAssistantPanel'
 import { cn } from '@/lib/utils'
 
 const userLinks = [
   { to: '/dashboard', label: 'Início', icon: LayoutDashboard, end: true },
+  { to: '/workouts', label: 'Meus Treinos', icon: Dumbbell },
   { to: '/calendar', label: 'Calendário', icon: Calendar },
   { to: '/progress', label: 'Progresso', icon: TrendingUp },
 ]
@@ -23,6 +26,7 @@ export function UserLayout() {
   const { appUser, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
 
   // Se o appUser carregar e for admin, redireciona para o painel admin
   useEffect(() => {
@@ -84,11 +88,23 @@ export function UserLayout() {
               <span>{link.label}</span>
             </NavLink>
           ))}
+
+          {/* Botão IA Personal Trainer */}
+          <button
+            onClick={() => { setAiOpen(true); setSidebarOpen(false) }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all mt-2 text-muted-foreground hover:text-foreground group relative overflow-hidden border border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5"
+          >
+            <div className="w-4 h-4 shrink-0 relative">
+              <Bot className="w-4 h-4 text-primary" />
+            </div>
+            <span className="flex-1 text-left">Robô Ed (IA)</span>
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-lg animate-pulse" />
+          </button>
         </nav>
 
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 px-3 py-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-bold text-sm">
               {appUser?.name?.charAt(0).toUpperCase() || 'U'}
             </div>
             <div className="flex-1 min-w-0">
@@ -123,6 +139,8 @@ export function UserLayout() {
           <Outlet />
         </main>
       </div>
+
+      <AiAssistantPanel isOpen={aiOpen} onClose={() => setAiOpen(false)} />
     </div>
   )
 }

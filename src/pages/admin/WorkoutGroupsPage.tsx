@@ -180,7 +180,7 @@ export function WorkoutGroupsPage() {
                     <button
                       key={color}
                       type="button"
-                      className={`w-7 h-7 rounded-full border-2 transition-all ${form.colorHex === color ? 'border-white scale-110' : 'border-transparent'}`}
+                      className={`w-7 h-7 rounded-lg border-2 transition-all ${form.colorHex === color ? 'border-white scale-110' : 'border-transparent'}`}
                       style={{ backgroundColor: color }}
                       onClick={() => setForm({ ...form, colorHex: color })}
                     />
@@ -214,7 +214,7 @@ export function WorkoutGroupsPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-4 h-4 rounded-full shrink-0"
+                      className="w-4 h-4 rounded-lg shrink-0"
                       style={{ backgroundColor: group.colorHex || '#22c55e' }}
                     />
                     <div>

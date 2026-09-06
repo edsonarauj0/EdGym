@@ -11,6 +11,7 @@ import { WorkoutGroupsPage } from '@/pages/admin/WorkoutGroupsPage'
 import { UsersPage } from '@/pages/admin/UsersPage'
 import { UserProfilePage } from '@/pages/admin/UserProfilePage'
 import { UserDashboard } from '@/pages/user/UserDashboard'
+import { UserWorkoutsPage } from '@/pages/user/UserWorkoutsPage'
 import { SessionPage } from '@/pages/user/SessionPage'
 import { CalendarPage } from '@/pages/user/CalendarPage'
 import { ProgressPage } from '@/pages/user/ProgressPage'
@@ -47,6 +48,7 @@ function AppRoutes() {
         <Route element={<ProtectedRoute userOnly />}>
           <Route element={<UserLayout />}>
             <Route path="/dashboard" element={<UserDashboard />} />
+            <Route path="/workouts" element={<UserWorkoutsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/progress" element={<ProgressPage />} />
           </Route>
