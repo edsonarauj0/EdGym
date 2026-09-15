@@ -74,24 +74,49 @@ export function WorkoutRegistrationDialog({
   const [form, setForm] = useState({ bodyWeightKg: '', notes: '' })
   const restoredUserRef = useRef<string | null>(null)
 
+  const workoutOptions = useMemo(() => [
+    ...(personalWorkout ? [{ ...personalWorkout, muscleTarget: 'Plano exclusivo para você', colorHex: '#a855f7', isPersonal: true }] : []),
+    ...groups.map((group) => ({ ...group, isPersonal: false })),
+  ], [groups, personalWorkout])
+
   const fetchLastWeights = async (groupId: string) => {
     if (!appUser || !groupId) return
     try {
+      const group = workoutOptions.find((g) => g.id === groupId)
+      if (!group) {
+        setLastWeights({})
+        return
+      }
+
       const q = query(
         collection(db, 'sessions'),
         where('userId', '==', appUser.uid),
-        where('groupId', '==', groupId),
         orderBy('createdAt', 'desc'),
-        limit(1),
+        limit(20)
       )
       const snap = await getDocs(q)
-      if (!snap.empty) {
-        const weights = snap.docs[0].data().exerciseWeights as Record<string, number> | undefined
-        setLastWeights(weights ?? {})
-      } else {
-        setLastWeights({})
+      
+      const newLastWeights: Record<string, number> = {}
+      const exerciseIds = group.exercises.map((ex, i) => ex.id || `${group.id}-${i}`)
+      
+      for (const docSnap of snap.docs) {
+        const weights = docSnap.data().exerciseWeights as Record<string, number> | undefined
+        if (!weights) continue
+        
+        for (const exId of exerciseIds) {
+          if (newLastWeights[exId] === undefined && weights[exId] !== undefined) {
+            newLastWeights[exId] = weights[exId]
+          }
+        }
+        
+        if (Object.keys(newLastWeights).length === exerciseIds.length) {
+          break
+        }
       }
-    } catch {
+      
+      setLastWeights(newLastWeights)
+    } catch (err) {
+      console.error('Erro ao buscar últimos pesos:', err)
       setLastWeights({})
     }
   }
@@ -156,10 +181,6 @@ export function WorkoutRegistrationDialog({
     return () => window.clearInterval(interval)
   }, [startedAt])
 
-  const workoutOptions = useMemo(() => [
-    ...(personalWorkout ? [{ ...personalWorkout, muscleTarget: 'Plano exclusivo para você', colorHex: '#a855f7', isPersonal: true }] : []),
-    ...groups.map((group) => ({ ...group, isPersonal: false })),
-  ], [groups, personalWorkout])
   const selectedGroup = workoutOptions.find((group) => group.id === selectedGroupId) ?? null
   const exercises = selectedGroup?.exercises ?? []
   const progress = exercises.length ? (completedIds.size / exercises.length) * 100 : 0
@@ -309,11 +330,11 @@ export function WorkoutRegistrationDialog({
                     }}
                     className={`min-w-0 rounded-lg border p-3 text-left transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
                   >
-                    <span className="flex min-w-0 items-center gap-2 font-medium">
-                      <span className="size-2 shrink-0 rounded-lg" style={{ backgroundColor: group.colorHex || '#22c55e' }} />
-                      <span className="min-w-0 break-words">{group.name}</span>
+                    <span className="flex min-w-0 items-start gap-2 font-medium">
+                      <span className="size-2 shrink-0 rounded-lg mt-1.5" style={{ backgroundColor: group.colorHex || '#22c55e' }} />
+                      <span className="min-w-0 flex-1 break-words whitespace-normal">{group.name}</span>
                     </span>
-                    {group.muscleTarget && <span className="mt-1 block break-words text-xs text-muted-foreground">{group.muscleTarget}</span>}
+                    {group.muscleTarget && <span className="mt-1 block break-words whitespace-normal text-xs text-muted-foreground">{group.muscleTarget}</span>}
                   </button>
                 )
               })}
@@ -372,18 +393,6 @@ export function WorkoutRegistrationDialog({
                             aria-label={`Marcar ${exercise.name} como concluído`}
                           />
 
-                          {/* Vídeo visível apenas no Mobile */}
-                          <a
-                            href={getYouTubeSearchUrl(exercise.videoSearchQuery || exercise.name)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:text-primary/80 sm:hidden"
-                            aria-label={`Ver vídeo de ${exercise.name}`}
-                            title="Ver vídeo"
-                          >
-                            <ExternalLink className="size-4" />
-                          </a>
-
                           {/* BADGE MOBILE CORRIGIDO: 3x em cima, 10-12 embaixo */}
                           <Badge
                             variant="outline"
@@ -398,18 +407,34 @@ export function WorkoutRegistrationDialog({
                           <span className={`block break-words pt-0.5 text-base font-medium sm:pt-0 ${checked ? 'text-muted-foreground line-through' : ''}`}>
                             {exercise.name}
                           </span>
-                          {/* Input de peso no Mobile */}
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            className="mt-2 h-8 w-50 sm:hidden"
-                            value={exerciseWeights[exerciseId] ?? ''}
-                            onChange={(event) => setExerciseWeights((previous) => ({ ...previous, [exerciseId]: event.target.value }))}
-                            placeholder={lastWeights[exerciseId] != null ? `↑ ${lastWeights[exerciseId]} kg` : 'kg'}
-                            aria-label={`Peso usado em ${exercise.name}, em kg`}
-                            disabled={!startedAt}
-                          />
+                          
+                          <div className="mt-2 flex flex-col items-start gap-2 sm:hidden">
+                            {/* Input de peso no Mobile */}
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.5"
+                              className="h-8 w-50"
+                              value={exerciseWeights[exerciseId] ?? ''}
+                              onChange={(event) => setExerciseWeights((previous) => ({ ...previous, [exerciseId]: event.target.value }))}
+                              placeholder={lastWeights[exerciseId] != null ? `↑ ${lastWeights[exerciseId]} kg` : 'kg'}
+                              aria-label={`Peso usado em ${exercise.name}, em kg`}
+                              disabled={!startedAt}
+                            />
+                            
+                            {/* Vídeo visível apenas no Mobile */}
+                            <a
+                              href={getYouTubeSearchUrl(exercise.videoSearchQuery || exercise.name)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:text-primary/80 inline-flex items-center gap-1.5 text-sm"
+                              aria-label={`Ver vídeo de ${exercise.name}`}
+                              title="Ver vídeo"
+                            >
+                              <ExternalLink className="size-4" />
+                              Ver vídeo
+                            </a>
+                          </div>
                         </div>
                       </div>
 
