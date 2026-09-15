@@ -399,7 +399,17 @@ export function WorkoutRegistrationDialog({
                             className="flex h-auto flex-col items-center justify-center gap-0.5 px-2 py-1 text-center font-semibold leading-none sm:hidden"
                           >
                             <span className="text-[11px] leading-tight">{exercise.sets}x</span>
-                            <span className="text-[10px] leading-tight text-muted-foreground">{exercise.reps}</span>
+                            <div className="flex flex-col items-center text-[10px] leading-none text-muted-foreground">
+                              {exercise.reps.includes('-') ? (
+                                <>
+                                  <span>{exercise.reps.split('-')[0].trim()}</span>
+                                  <span className="text-[8px] leading-[0.5]">-</span>
+                                  <span>{exercise.reps.split('-')[1].trim()}</span>
+                                </>
+                              ) : (
+                                <span>{exercise.reps}</span>
+                              )}
+                            </div>
                           </Badge>
                         </div>
 
