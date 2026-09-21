@@ -11,6 +11,7 @@ import {
   X,
   ChevronRight,
   Bot,
+  BookOpen,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ const adminLinks = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/equipment', label: 'Aparelhos', icon: Monitor },
   { to: '/admin/groups', label: 'Grupos de Treino', icon: Layers },
+  { to: '/library', label: 'Biblioteca', icon: BookOpen },
   { to: '/admin/users', label: 'Usuários', icon: Users },
 ]
 

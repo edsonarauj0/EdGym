@@ -15,6 +15,7 @@ import { UserWorkoutsPage } from '@/pages/user/UserWorkoutsPage'
 import { SessionPage } from '@/pages/user/SessionPage'
 import { CalendarPage } from '@/pages/user/CalendarPage'
 import { ProgressPage } from '@/pages/user/ProgressPage'
+import { ExerciseLibraryPage } from '@/pages/shared/ExerciseLibraryPage'
 
 // Redireciona baseado no role — dentro do AuthProvider para usar useAuth()
 function RoleRedirect() {
@@ -41,6 +42,7 @@ function AppRoutes() {
             <Route path="/admin/groups" element={<WorkoutGroupsPage />} />
             <Route path="/admin/users" element={<UsersPage />} />
             <Route path="/admin/users/:uid" element={<UserProfilePage />} />
+            <Route path="/library" element={<ExerciseLibraryPage />} />
           </Route>
         </Route>
 
@@ -51,6 +53,7 @@ function AppRoutes() {
             <Route path="/workouts" element={<UserWorkoutsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/progress" element={<ProgressPage />} />
+            <Route path="/library" element={<ExerciseLibraryPage />} />
           </Route>
           <Route path="/session/:groupId" element={<SessionPage />} />
         </Route>

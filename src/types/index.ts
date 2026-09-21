@@ -2,6 +2,25 @@ import { Timestamp } from 'firebase/firestore'
 
 export type UserRole = 'admin' | 'user'
 
+export type ExerciseDifficulty = 'Iniciante' | 'Intermediário' | 'Avançado'
+export type ExerciseCategory = 'Força' | 'Funcional' | 'Cardio' | 'Mobilidade' | 'Isométrico'
+
+export interface LibraryExercise {
+  id: string
+  name: string
+  description: string
+  muscleGroups: string[]   // e.g. ["Peito", "Tríceps"]
+  equipment: string        // e.g. "Barra", "Sem equipamento"
+  sets: string
+  reps: string
+  restSeconds: number
+  difficulty: ExerciseDifficulty
+  category: ExerciseCategory
+  videoSearchQuery: string
+  aiGenerated: boolean
+  createdAt: Timestamp
+}
+
 export interface AppUser {
   uid: string
   name: string

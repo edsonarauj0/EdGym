@@ -8,6 +8,7 @@ import {
   Menu,
   X,
   Bot,
+  BookOpen,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 const userLinks = [
   { to: '/dashboard', label: 'Início', icon: LayoutDashboard, end: true },
   { to: '/workouts', label: 'Meus Treinos', icon: Dumbbell },
+  { to: '/library', label: 'Biblioteca', icon: BookOpen },
   { to: '/calendar', label: 'Calendário', icon: Calendar },
   { to: '/progress', label: 'Progresso', icon: TrendingUp },
 ]

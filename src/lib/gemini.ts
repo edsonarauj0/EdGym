@@ -144,6 +144,64 @@ Inclua de 4 a 8 exercícios seguros e práticos em português brasileiro.`
   return JSON.parse(json)
 }
 
+// ─── Geração de exercícios para a Biblioteca Global ─────────────────────────
+
+export interface GeneratedLibraryExercise {
+  name: string
+  description: string
+  muscleGroups: string[]
+  equipment: string
+  sets: string
+  reps: string
+  restSeconds: number
+  difficulty: 'Iniciante' | 'Intermediário' | 'Avançado'
+  category: 'Força' | 'Funcional' | 'Cardio' | 'Mobilidade' | 'Isométrico'
+  videoSearchQuery: string
+}
+
+export async function generateLibraryExercises(
+  prompt: string,
+): Promise<GeneratedLibraryExercise[]> {
+  const ai = getGenAI()
+  if (!ai) throw new Error('Gemini API key não configurada')
+
+  const fullPrompt = `Você é um personal trainer especialista. O usuário pediu: "${prompt}".
+Gere de 3 a 6 exercícios para a Biblioteca de Exercícios da academia EdGym.
+Retorne APENAS JSON válido (sem markdown), com exatamente esta estrutura:
+[
+  {
+    "name": "Nome do exercício em português",
+    "description": "Instruções claras de execução em 1-2 frases",
+    "muscleGroups": ["Músculo1", "Músculo2"],
+    "equipment": "Equipamento necessário (ou 'Sem equipamento')",
+    "sets": "3",
+    "reps": "10-12",
+    "restSeconds": 60,
+    "difficulty": "Iniciante",
+    "category": "Força",
+    "videoSearchQuery": "nome exercício tutorial execução"
+  }
+]
+difficulty deve ser exatamente um de: "Iniciante", "Intermediário", "Avançado".
+category deve ser exatamente um de: "Força", "Funcional", "Cardio", "Mobilidade", "Isométrico".
+Responda somente com o array JSON, sem nenhum texto antes ou depois.`
+
+  let result
+  try {
+    result = await retryTransientGeminiRequest(() =>
+      ai.getGenerativeModel({ model: MODEL_PRIMARY }).generateContent(fullPrompt),
+    )
+  } catch (err) {
+    if (!isTransientGeminiError(err)) throw err
+    result = await retryTransientGeminiRequest(() =>
+      ai.getGenerativeModel({ model: MODEL_FALLBACK }).generateContent(fullPrompt),
+    )
+  }
+
+  const text = result.response.text().trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(text) as GeneratedLibraryExercise[]
+}
+
 export interface EdGymContext {
   equipmentList: string[]
   workoutGroups: string[]
